@@ -68,7 +68,7 @@ public class Logger
         _clr(def);
         Console.Write("[");
         _clr(debug);
-        Console.Write("OK");
+        Console.Write("DBG");
         _clr(def);
         Console.Write("] ");
         _clr(txt);

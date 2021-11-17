@@ -25,7 +25,7 @@ namespace RobloxScriptCompiler
             } else Directory.CreateDirectory(tmpdir);
         }
 
-        public string Compile(string src, string name = "luau")
+        public string Compile(string src, string name = "luau", int offset = 0)
         {
             string fn = rand.Next(100000, 999999).ToString() + ".bin";
             File.WriteAllText(tmpdir + "\\" + fn, src);
@@ -34,7 +34,7 @@ namespace RobloxScriptCompiler
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = bindir + "\\compiler.exe",
-                    Arguments = "./tmp/" + fn + " " + name,
+                    Arguments = "./tmp/" + fn + " " + name + " " + offset.ToString(),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
