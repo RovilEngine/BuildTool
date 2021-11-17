@@ -26,10 +26,12 @@ namespace RobloxScriptCompiler
         static Dictionary<string, string> assets = new Dictionary<string, string> { };
         static string base_dir = Path.Combine(Directory.GetCurrentDirectory(), "bin");
         static Random random = new Random();
+        static string[] args;
 
         [STAThread]
-        static void Main(string[] args)
+        static void Main(string[] argv)
         {
+            args = argv;
             assets.Add("compiler", "exe");
             assets.Add("liblua", "dll");
             assets.Add("client", "xml");
@@ -93,7 +95,6 @@ namespace RobloxScriptCompiler
             string propertiesMatch = baseMatch + "/Properties";
             XmlNodeList localscripts = doc.DocumentElement.SelectNodes(baseMatch);
             int count = 0;
-            Logger.Info("Loading scripts");
             foreach (XmlNode script in localscripts)
             {
                 count++;
@@ -101,7 +102,7 @@ namespace RobloxScriptCompiler
                 XmlNode source = script.SelectSingleNode(propertiesMatch + "/ProtectedString[@name='Source']");
                 XmlNode guid = script.SelectSingleNode(propertiesMatch + "/string[@name='ScriptGuid']");
                 XmlNode referent = script.Attributes.GetNamedItem("referent");
-                Logger.Info("Parsing script " + count.ToString() + "/" + localscripts.Count.ToString());
+                Logger.Info(count.ToString() + "/" + localscripts.Count.ToString() + " Loading \"" + name.InnerText.ToString() + "\"");
                 if (referent != null
                 && source != null
                 && guid != null
@@ -110,7 +111,7 @@ namespace RobloxScriptCompiler
                 && !name.InnerText.StartsWith("!")
                 && !name.InnerText.StartsWith("@"))
                 {
-                    Logger.Info("Compiling \"" + name.InnerText.ToString() + "\" (source length " + source.InnerText.Length.ToString() + ")");
+                    Logger.Debug("Compiling \"" + name.InnerText.ToString() + "\" (source length " + source.InnerText.Length.ToString() + ")");
                     script.Attributes.GetNamedItem("class").Value = "ModuleScript";
                     source.InnerText = Lua.Compile(source.InnerText, name.InnerText, offset);
                     script.Attributes.SetNamedItem(referent);
@@ -149,8 +150,8 @@ namespace RobloxScriptCompiler
             client_xml.LoadXml(client_data);
             XmlNode replicated_first = doc.DocumentElement.SelectSingleNode("//Item[@class='ReplicatedFirst']");
             var emptyNamepsaces = new XmlSerializerNamespaces(new[] {
-                        XmlQualifiedName.Empty
-                    });
+                XmlQualifiedName.Empty
+            });
             using (var writer = replicated_first.CreateNavigator().AppendChild())
             {
                 var serializer = new XmlSerializer(client_xml.GetType());
@@ -161,14 +162,25 @@ namespace RobloxScriptCompiler
             doc.Save(outfile);
             elapsed.Stop();
             Logger.Ok("Done (took " + (elapsed.ElapsedMilliseconds / 1000).ToString() + "s)");
-            Logger.Info("Opening studio");
-            Process studio = new Process();
-            studio.StartInfo = new ProcessStartInfo()
+            if (Logger.Debug("Opening studio"))
             {
-                FileName = outfile
-            };
-            studio.Start();
-            studio.WaitForExit();
+                Process studio = new Process();
+                studio.StartInfo = new ProcessStartInfo()
+                {
+                    FileName = outfile
+                };
+                studio.Start();
+                studio.WaitForExit();
+            } else if (args.Length == 0)
+            {
+                Process exporer = new Process();
+                exporer.StartInfo = new ProcessStartInfo()
+                {
+                    FileName = "explorer.exe",
+                    Arguments = "/select," + outfile
+                };
+                exporer.Start();
+            }
         }
 
         static void PromptToCompile(string openfile = null)

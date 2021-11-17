@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 
 public class Logger
@@ -63,16 +64,21 @@ public class Logger
         Console.WriteLine(text.ToString());
         _clr(ConsoleColor.DarkGray);
     }
-    public static void Debug(string text)
+    public static bool Debug(string text)
     {
-        _clr(def);
-        Console.Write("[");
-        _clr(debug);
-        Console.Write("DBG");
-        _clr(def);
-        Console.Write("] ");
-        _clr(txt);
-        Console.WriteLine(text.ToString());
-        _clr(ConsoleColor.DarkGray);
+        if (Debugger.IsAttached)
+        {
+            _clr(def);
+            Console.Write("[");
+            _clr(debug);
+            Console.Write("DBG");
+            _clr(def);
+            Console.Write("] ");
+            _clr(txt);
+            Console.WriteLine(text.ToString());
+            _clr(ConsoleColor.DarkGray);
+            return true;
+        }
+        else return false;
     }
 }
