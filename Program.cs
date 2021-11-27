@@ -27,6 +27,7 @@ namespace RobloxScriptCompiler
         static string base_dir = Path.Combine(Directory.GetCurrentDirectory(), "bin");
         static Random random = new Random();
         static string[] args;
+        static string build_id = Guid.NewGuid().ToString().Replace("-", "");
 
         [STAThread]
         static void Main(string[] argv)
@@ -87,22 +88,24 @@ namespace RobloxScriptCompiler
             LocalScript,
             ModuleScript
         }
-        static void ParseScripts(XmlDocument doc, int offset, ScriptType type = ScriptType.LocalScript)
+        static void ParseScripts(XmlNodeList scripts, int offset, ScriptType type = ScriptType.LocalScript)
         {
             bool isModule = type == ScriptType.ModuleScript;
-            string scriptTypeString = isModule ? "ModuleScript" : "LocalScript";
-            string baseMatch = "//Item[@class='" + scriptTypeString + "']";
-            string propertiesMatch = baseMatch + "/Properties";
-            XmlNodeList localscripts = doc.DocumentElement.SelectNodes(baseMatch);
             int count = 0;
-            foreach (XmlNode script in localscripts)
+            foreach (XmlNode script in scripts)
             {
                 count++;
-                XmlNode name = script.SelectSingleNode(propertiesMatch + "/string[@name='Name']");
-                XmlNode source = script.SelectSingleNode(propertiesMatch + "/ProtectedString[@name='Source']");
-                XmlNode guid = script.SelectSingleNode(propertiesMatch + "/string[@name='ScriptGuid']");
+                XmlNode properties = script.SelectSingleNode("./Properties[1]");
+                XmlNode name = properties.SelectSingleNode("./string[@name='Name'][1]");
+                XmlNode source = properties.SelectSingleNode("./ProtectedString[@name='Source'][1]");
+                XmlNode guid = properties.SelectSingleNode("./string[@name='ScriptGuid'][1]");
                 XmlNode referent = script.Attributes.GetNamedItem("referent");
-                Logger.Info(count.ToString() + "/" + localscripts.Count.ToString() + " Loading \"" + name.InnerText.ToString() + "\"");
+                if (name == null || source == null || guid == null || referent == null)
+                {
+                    Logger.Debug("Script attribute was null or ignored!");
+                    continue;
+                }
+                Logger.Info(count.ToString() + "/" + scripts.Count.ToString() + " - Loading \"" + name.InnerText.ToString() + "\"");
                 if (referent != null
                 && source != null
                 && guid != null
@@ -122,12 +125,22 @@ namespace RobloxScriptCompiler
                 {
                     Logger.Warn("Skipping script");
                 }
+                ParseScripts(script.SelectNodes("./Item[@class='" + (isModule ? "ModuleScript" : "LocalScript") + "']"), offset, type);
             }
+        }
+
+        static void SetClientMetadata(XmlDocument doc, Dictionary<string, object> metadata)
+        {
+            XmlNode buildData = doc.SelectSingleNode("//Item[@class='StringValue'][1]");
+            XmlNode properties = buildData.SelectSingleNode("./Properties[1]");
+            XmlNode value = properties.SelectSingleNode("./string[@name='Value'][1]");
+            value.InnerText = JsonConvert.SerializeObject(metadata);
         }
 
         static void CompileFile(string fileName, int offset)
         {
             var build_options = new Dictionary<string, object> { };
+            build_options.Add("BuildId", build_id);
             build_options.Add("Version", ver + "b");
             build_options.Add("Offset", offset);
             //build_options.Add("Arguments", args);
@@ -138,16 +151,17 @@ namespace RobloxScriptCompiler
             string outfile = Path.GetDirectoryName(infile) + "\\Compiled_" + Path.GetFileName(infile);
             doc.Load(infile);
             Logger.Info("Loading ModuleScripts");
-            ParseScripts(doc, offset, ScriptType.ModuleScript);
+            ParseScripts(doc.DocumentElement.SelectNodes("//Item[@class='ModuleScript']"), offset, ScriptType.ModuleScript);
             Logger.Ok("All ModuleScripts compiled");
             Logger.Info("Loading LocalScripts");
-            ParseScripts(doc, offset, ScriptType.LocalScript);
+            ParseScripts(doc.DocumentElement.SelectNodes("//Item[@class='LocalScript']"), offset, ScriptType.LocalScript);
             Logger.Ok("All LocalScripts compiled");
             doc.Save(outfile);
             Logger.Info("Adding client script");
-            string client_data = File.ReadAllText(Path.Combine(base_dir, "client.xml")).Replace("%builddata%", JsonConvert.SerializeObject(build_options));
+            string client_data = File.ReadAllText(Path.Combine(base_dir, "client.xml"));
             XmlDocument client_xml = new XmlDocument();
             client_xml.LoadXml(client_data);
+            SetClientMetadata(client_xml, build_options);
             XmlNode replicated_first = doc.DocumentElement.SelectSingleNode("//Item[@class='ReplicatedFirst']");
             var emptyNamepsaces = new XmlSerializerNamespaces(new[] {
                 XmlQualifiedName.Empty
@@ -187,6 +201,7 @@ namespace RobloxScriptCompiler
         {
             var offset = 0;//random.Next(26, 255);
             Logger.Debug("Using an offset of " + offset.ToString());
+            Logger.Debug("Build id " + build_id);
             if (openfile == null)
             {
                 using (OpenFileDialog openFileDialog = new OpenFileDialog())

@@ -20,7 +20,11 @@ namespace RobloxScriptCompiler
             {
                 foreach (FileInfo file in new DirectoryInfo(tmpdir).GetFiles())
                 {
-                    file.Delete();
+                    try
+                    {
+                        file.Delete();
+                    }
+                    catch { }
                 }
             } else Directory.CreateDirectory(tmpdir);
         }
@@ -34,18 +38,28 @@ namespace RobloxScriptCompiler
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = bindir + "\\compiler.exe",
-                    Arguments = "./tmp/" + fn + " " + name + " " + offset.ToString(),
+                    Arguments = "\"./tmp/" + fn + "\" \"" + name + "\" " + offset.ToString(),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     CreateNoWindow = true
                 }
             };
-            proc.Start();
+            try
+            {
+                proc.Start();
+            } catch(Exception e)
+            {
+                Logger.Error(e.ToString());
+            }
             string data = "";
             while (!proc.StandardOutput.EndOfStream)
             {
                 string line = proc.StandardOutput.ReadLine();
                 data += line;
+            }
+            if (proc.ExitCode != 0)
+            {
+                return "-- [!] This script failed to compile due to an error in the original script.\nreturn{0x0;};";
             }
             File.Delete(tmpdir + "\\" + fn);
             return data;
